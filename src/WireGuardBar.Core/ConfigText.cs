@@ -8,7 +8,7 @@ public static partial class ConfigText
 {
     public const int MaxConfigBytes = 64 * 1024;
 
-    [GeneratedRegex(@"^[0-9a-fA-F:./, ]+$")]
+    [GeneratedRegex(@"\A[0-9a-fA-F:./, ]+\z")]
     private static partial Regex AllowedIpsChars();
 
     [GeneratedRegex(@"^[ \t]*AllowedIPs[ \t]*=.*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
@@ -16,6 +16,13 @@ public static partial class ConfigText
 
     [GeneratedRegex(@"^[ \t]*(Address|DNS)[ \t]*=.*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex AddressOrDnsLine();
+
+    [GeneratedRegex(@"^[ \t]*(PreUp|PostUp|PreDown|PostDown)[ \t]*=", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
+    private static partial Regex ScriptLine();
+
+    /// Script hooks run as SYSTEM when WireGuard's DangerousScriptExecution is on, so the helper
+    /// never accepts a config that has them from the (unelevated) app.
+    public static bool HasScripts(string config) => ScriptLine().IsMatch(config);
 
     public static bool IsValidAllowedIps(string? s) =>
         s is { Length: > 0 and <= 512 } && AllowedIpsChars().IsMatch(s);

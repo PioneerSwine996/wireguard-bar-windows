@@ -11,6 +11,8 @@ public sealed record HelperResponse(bool Ok, string Output = "", string? Error =
 public static class Protocol
 {
     public const string PipeName = "wgbar-helper";
+    /// Bumped whenever the helper's commands change; the app asks for setup when the installed one differs.
+    public const int HelperVersion = 1;
     public const int MaxFrameBytes = 256 * 1024;
 
     public static async Task WriteAsync<T>(Stream stream, T message, CancellationToken ct)

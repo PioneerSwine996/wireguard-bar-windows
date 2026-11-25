@@ -90,9 +90,16 @@ public class ConfigTextTests
     [Theory]
     [InlineData("10.0.0.0/24, ::/0", true)]
     [InlineData("10.0.0.0/24\nPostUp = calc.exe", false)]
+    [InlineData("10.0.0.0/24\n", false)]
     [InlineData("x", false)]
     [InlineData("", false)]
     public void ValidatesAllowedIps(string s, bool ok) => Assert.Equal(ok, ConfigText.IsValidAllowedIps(s));
+
+    [Theory]
+    [InlineData("[Interface]\nPostUp = calc.exe", true)]
+    [InlineData("[Interface]\n  preup=x", true)]
+    [InlineData("[Interface]\n# PostUp = x\nAddress = 10.0.0.2/32", false)]
+    public void DetectsScriptHooks(string config, bool has) => Assert.Equal(has, ConfigText.HasScripts(config));
 
     [Fact]
     public void HidesPrivateAndPresharedKeys()

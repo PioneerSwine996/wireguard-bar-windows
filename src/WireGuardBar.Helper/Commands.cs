@@ -8,13 +8,13 @@ namespace WireGuardBar.Helper;
 class HelperException(string message) : Exception(message);
 
 /// The helper's whole command set, mirroring the macOS wgbar-helper:
-/// status | up NAME [ALLOWEDIPS] | down NAME | addresses NAME | read NAME | write NAME | import NAME.
+/// version | status | up NAME [ALLOWEDIPS] | down NAME | addresses NAME | read NAME | write NAME | import NAME.
 /// Configs live in Data\Configurations under the install folder (SYSTEM and Administrators only);
 /// per-connection copies with AllowedIPs overridden go to Data\Run.
 sealed class Commands
 {
-    private const string Usage = "usage: status | addresses NAME | import NAME | up NAME [ALLOWEDIPS] | down NAME | read NAME | write NAME";
-    private static readonly string WireGuardDir =
+    private const string Usage = "usage: version | status | addresses NAME | import NAME | up NAME [ALLOWEDIPS] | down NAME | read NAME | write NAME";
+    public static readonly string WireGuardDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WireGuard");
 
     private readonly string confDir, runDir;
@@ -35,6 +35,7 @@ sealed class Commands
         {
             var output = r.Command switch
             {
+                "version" => Protocol.HelperVersion.ToString(),
                 "status" => await StatusAsync(ct),
                 "addresses" => ConfigText.AddressLines(File.ReadAllText(Conf(r.Name))),
                 "read" => File.ReadAllText(Conf(r.Name)),
@@ -118,6 +119,8 @@ sealed class Commands
     {
         if (text is null || !ConfigText.LooksLikeConfig(text)) throw new HelperException("That isn't a WireGuard configuration (no [Interface] section).");
         if (text.Length > ConfigText.MaxConfigBytes) throw new HelperException("That configuration is too large.");
+        if (ConfigText.HasScripts(text))
+            throw new HelperException("PreUp, PostUp, PreDown and PostDown aren't allowed: they would run as SYSTEM. Remove those lines.");
         var tmp = Path.Combine(confDir, $".wgbar-{Guid.NewGuid():N}.tmp");
         try
         {

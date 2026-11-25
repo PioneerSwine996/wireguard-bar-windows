@@ -4,9 +4,14 @@ using System.ServiceProcess;
 using WireGuardBar.Helper;
 
 // wgbar-helper: the only part of WireGuard Bar that runs elevated (as LocalSystem).
-// Installed as the "wgbar-helper" service by install.ps1 with the one account allowed to talk to it:
-//   wgbar-helper.exe --user S-1-5-21-...
-// `--console` runs it in the foreground for debugging (from an elevated prompt).
+//   wgbar-helper.exe install [--user ACCOUNT]   register/upgrade the service (elevated; run by the installer
+//                                               and the app's setup screen)
+//   wgbar-helper.exe uninstall                  stop our tunnels and remove the service (elevated)
+//   wgbar-helper.exe --user S-1-5-21-...        what the service runs: only that account may use the pipe
+// `--console` runs the service in the foreground for debugging (from an elevated prompt).
+
+if (args is ["install", ..]) return ServiceInstaller.Install(args);
+if (args is ["uninstall"]) return ServiceInstaller.Uninstall();
 
 var userIndex = Array.IndexOf(args, "--user");
 if (userIndex < 0 || userIndex + 1 >= args.Length)
@@ -28,8 +33,18 @@ if (args.Contains("--console"))
 ServiceBase.Run(new HelperService(user, dataDir));
 return 0;
 
-sealed class HelperService(SecurityIdentifier user, string dataDir) : ServiceBase
+sealed class HelperService : ServiceBase
 {
+    private readonly SecurityIdentifier user;
+    private readonly string dataDir;
+
+    public HelperService(SecurityIdentifier user, string dataDir)
+    {
+        this.user = user;
+        this.dataDir = dataDir;
+        ServiceName = "wgbar-helper";
+    }
+
     private readonly CancellationTokenSource stop = new();
     private Task? running;
 
@@ -41,8 +56,10 @@ sealed class HelperService(SecurityIdentifier user, string dataDir) : ServiceBas
             catch (OperationCanceledException) { }
             catch (Exception e)
             {
-                EventLog.WriteEntry("Application", $"wgbar-helper stopped: {e}", EventLogEntryType.Error);
-                Stop();
+                EventLog.WriteEntry(ServiceName, $"wgbar-helper stopped: {e}", EventLogEntryType.Error);
+                // exit as a crash so the service's failure actions restart it
+                // (a clean Stop() would report success and leave it stopped)
+                Environment.Exit(1);
             }
         });
     }

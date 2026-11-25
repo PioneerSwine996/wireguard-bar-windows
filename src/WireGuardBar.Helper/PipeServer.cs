@@ -10,7 +10,6 @@ namespace WireGuardBar.Helper;
 /// rule); network logons are denied outright.
 sealed class PipeServer(SecurityIdentifier user, Commands commands)
 {
-    private const int MaxInstances = 4;
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     public async Task RunAsync(CancellationToken ct)
@@ -19,10 +18,22 @@ sealed class PipeServer(SecurityIdentifier user, Commands commands)
         var first = true;
         while (!ct.IsCancellationRequested)
         {
-            // FirstPipeInstance: fail instead of joining a pipe someone else created first.
-            var options = PipeOptions.Asynchronous | (first ? PipeOptions.FirstPipeInstance : 0);
-            var pipe = NamedPipeServerStreamAcl.Create(Protocol.PipeName, PipeDirection.InOut, MaxInstances,
-                PipeTransmissionMode.Byte, options, 0, 0, security);
+            NamedPipeServerStream pipe;
+            try
+            {
+                // FirstPipeInstance: fail instead of joining a pipe someone else created first.
+                // No instance cap: busy connections (an `up` can take a minute) must never make the
+                // next Create fail and take the service down.
+                var options = PipeOptions.Asynchronous | (first ? PipeOptions.FirstPipeInstance : 0);
+                pipe = NamedPipeServerStreamAcl.Create(Protocol.PipeName, PipeDirection.InOut,
+                    NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, options, 0, 0, security);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // someone else holds the name (squatting) or a transient failure: keep trying, don't exit
+                await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                continue;
+            }
             first = false;
             try { await pipe.WaitForConnectionAsync(ct); }
             catch { await pipe.DisposeAsync(); throw; }
