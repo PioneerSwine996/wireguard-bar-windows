@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Platform-neutral logic shared by the app and the helper, so it can be tested anywhere. -->
+  <PropertyGroup>
+    <TargetFramework>$(WgNet)</TargetFramework>
+  </PropertyGroup>
+</Project>

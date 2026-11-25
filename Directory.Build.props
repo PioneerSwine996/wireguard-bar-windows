@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <!-- .NET 10 is the current LTS. To compile on a machine that only has an older SDK
+         (e.g. a Mac with the .NET 9 SDK), pass -p:WgNet=net9.0. -->
+    <WgNet Condition="'$(WgNet)' == ''">net10.0</WgNet>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>0.1.0</Version>
+    <Authors>PioneerSwine996</Authors>
+    <Product>WireGuard Bar</Product>
+    <!-- lets the Windows projects compile (not run) on macOS/Linux -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,8 @@
+bin/
+obj/
+.vs/
+*.user
+/.dotnet/
+/dist/
+/dotnet-install.ps1
+.DS_Store
