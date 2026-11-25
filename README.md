@@ -24,8 +24,9 @@ well-tested code.
 
 ## Install
 
-1. Download `WireGuardBar-Setup.exe` from the latest CI run on `main`:
-   <https://gitlab.com/PioneerSwine996/wireguard-bar-windows/-/jobs/artifacts/main/raw/WireGuardBar-Setup.exe?job=setup>
+1. Download `WireGuardBar-Setup.exe` from the latest release:
+   <https://github.com/PioneerSwine996/wireguard-bar-windows/releases/latest/download/WireGuardBar-Setup.exe>
+   (also on [GitLab's releases page](https://gitlab.com/PioneerSwine996/wireguard-bar-windows/-/releases)).
 2. Run it. One administrator prompt installs the app and its helper service, a Start menu entry and sign-in
    autostart. If [WireGuard for Windows](https://www.wireguard.com/install/) isn't installed, setup offers to
    download and run its official installer.

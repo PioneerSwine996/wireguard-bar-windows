@@ -1,0 +1,34 @@
+# On a version tag (v1.2.3): test, build WireGuardBar-Setup.exe and publish a GitHub Release with it.
+# Independent of GitLab, which builds and releases the same tag on its own.
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: write   # create the release with the built-in token
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build
+        run: dotnet build WireGuardBar.sln -c Release
+      - name: Test
+        run: dotnet test tests/WireGuardBar.Core.Tests -c Release --no-build
+      - name: Build installer
+        run: |
+          ./scripts/package.ps1   # version from the tag; uses the image's Inno Setup or installs it
+          Move-Item dist/WireGuardBar-Setup.exe WireGuardBar-Setup.exe
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${{ github.ref_name }}" WireGuardBar-Setup.exe
+          --title "WireGuard Bar for Windows ${{ github.ref_name }}"
+          --notes "Download WireGuardBar-Setup.exe below. See CHANGELOG.md for what changed."

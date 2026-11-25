@@ -16,7 +16,8 @@ GitHub (<https://github.com/PioneerSwine996/wireguard-bar-windows>) is a read-on
 
 4. If you change `src/WireGuardBar.Helper` or anything it runs, say so in the pull request and explain how inputs are
    validated. The helper runs as SYSTEM and answers without a UAC prompt, so it gets the closest review.
-5. Open the pull request against `main`. Merge requests on GitLab are welcome too; GitLab CI builds and tests them.
+5. Open the pull request against `main`. GitHub Actions builds and tests it on Windows. Merge requests on GitLab are
+   welcome too; GitLab CI builds and tests them.
 
 ## How pull requests are merged (maintainers)
 
@@ -34,15 +35,19 @@ When the mirror pushes `main`, GitHub sees the pull request's commits on `main` 
 
 ## Releasing (maintainers)
 
-Push a version tag (`v1.2.3`) to GitLab. CI builds `WireGuardBar-Setup.exe`, creates a GitLab Release that links it,
-and creates the same release on the GitHub mirror with the installer attached.
+Tag once and push the tag:
 
-One-time setup for the GitHub half:
+```bash
+git tag v1.2.3
+git push origin v1.2.3      # origin pushes to both GitLab and GitHub
+```
 
-1. On GitHub, create a fine-grained personal access token limited to `PioneerSwine996/wireguard-bar-windows` with
-   **Contents: Read and write**.
-2. In GitLab, **Settings > CI/CD > Variables**: add it as `GITHUB_RELEASE_TOKEN`, **masked** and **protected**.
-3. In GitLab, **Settings > Repository > Protected tags**: protect `v*`, so tag pipelines can read that variable.
+Each site then builds, tests and releases on its own, with nothing shared between them and no secrets to set up:
+GitLab CI creates a GitLab Release linking `WireGuardBar-Setup.exe`, and GitHub Actions
+(`.github/workflows/release.yml`) creates a GitHub Release with it attached. The app and installer take their version
+from the tag. The file name stays fixed, so
+<https://github.com/PioneerSwine996/wireguard-bar-windows/releases/latest/download/WireGuardBar-Setup.exe> always points
+at the newest installer.
 
 ## Style
 

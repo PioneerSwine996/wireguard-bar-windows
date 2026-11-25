@@ -1,0 +1,20 @@
+# Builds and tests pull requests on the GitHub mirror (the main pipeline runs on GitLab).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build
+        run: dotnet build WireGuardBar.sln -c Release
+      - name: Test
+        run: dotnet test tests/WireGuardBar.Core.Tests -c Release --no-build
