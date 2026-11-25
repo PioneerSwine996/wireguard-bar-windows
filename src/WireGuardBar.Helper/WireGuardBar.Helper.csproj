@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(WgNet)-windows</TargetFramework>
+    <AssemblyName>wgbar-helper</AssemblyName>
+    <RootNamespace>WireGuardBar.Helper</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.0" />
+    <ProjectReference Include="..\WireGuardBar.Core\WireGuardBar.Core.csproj" />
+  </ItemGroup>
+</Project>
