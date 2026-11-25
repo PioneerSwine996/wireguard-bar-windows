@@ -1,93 +1,114 @@
-# wireguard-bar-windows
+# WireGuard Bar for Windows
 
+A small tray app for switching WireGuard tunnels on and off, ported from
+[WireGuard Bar for macOS](https://gitlab.com/PioneerSwine996/wireguard). It drives the tunnel service of the official
+[WireGuard for Windows](https://www.wireguard.com/install/) client, so the tunnels themselves run on WireGuard's own,
+well-tested code.
 
+- **Tray icon:** a shield with a slash when nothing is connected, a locked shield when a tunnel routes all traffic,
+  an open lock when it's a split tunnel. Clicking it opens a black panel with every tunnel and a Connect/Disconnect
+  button. Only one tunnel is active at a time.
+- **Manage window:** tunnel list on the left (collapsible to a rail of numbered badges with status lights). On the
+  right, a globe shows the route from this PC through your local network to the server (and, for a split tunnel,
+  straight out to the internet), then Enabled, Route all traffic, connection status, data sent and received, latest
+  handshake and endpoint.
+- **Import:** the + button copies a `.conf` file into the helper's config folder, named after the file. It never
+  overwrites an existing tunnel.
+- **Route all traffic:** on sends everything through the VPN (`AllowedIPs = 0.0.0.0/0, ::/0`); off sends only the
+  tunnel's own subnets (from `Address`, host addresses widened to /24 or /64) and its DNS servers. The helper applies
+  this to a separate copy; your config file is never changed. Tunnels you never toggle run their config as written.
+- **On-Demand:** a list of Wi-Fi networks per tunnel. Joining one connects the tunnel; leaving it disconnects it again
+  if On-Demand turned it on.
+- **Edit Configuration:** asks for Windows Hello (or your Windows password when Hello isn't set up), then opens the
+  config in an editor inside the window.
 
-## Getting started
+## Install
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+1. Install [WireGuard for Windows](https://www.wireguard.com/install/).
+2. Download `WireGuardBar-windows.zip` from the latest CI run on `main`:
+   <https://gitlab.com/PioneerSwine996/wireguard-bar-windows/-/jobs/artifacts/main/raw/WireGuardBar-windows.zip?job=zip>
+3. Unzip it, open PowerShell **as administrator** in the unzipped folder and run:
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\install.ps1
+   ```
 
-## Add your files
+   If you elevate with a separate administrator account, name the account that will use the app:
+   `.\install.ps1 -User "PC\alex"`.
+4. Open **WireGuard Bar** from the Start menu and import a tunnel with +. Windows 11 hides new tray icons in the
+   overflow menu; drag the shield onto the taskbar to keep it visible.
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+To uninstall, run `.\uninstall.ps1` as administrator. It stops tunnels started from WireGuard Bar's configs and keeps
+the configs unless you add `-RemoveConfigs`.
 
+## Build
+
+```powershell
+dotnet build WireGuardBar.sln
+dotnet test tests/WireGuardBar.Core.Tests
+.\scripts\package.ps1          # dist\WireGuardBar-windows.zip
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/PioneerSwine996/wireguard-bar-windows.git
-git branch -M main
-git push -uf origin main
-```
 
-## Integrate with your tools
+Needs the .NET 10 SDK. The core library and its tests also build and run on macOS and Linux; the app and helper
+compile there too (`EnableWindowsTargeting`), but only run on Windows.
 
-* [Set up project integrations](https://gitlab.com/PioneerSwine996/wireguard-bar-windows/-/settings/integrations)
+## Why C#, .NET 10 and WPF
 
-## Collaborate with your team
+- **WireGuard for Windows does the tunnelling.** Its `wireguard.exe /installtunnelservice` and `wg.exe` are a stable,
+  documented interface, so there's no reason to reach for a lower-level language.
+- **WPF over WinUI 3:** WPF ships with .NET, needs no Windows App SDK runtime, and builds with nothing but the .NET SDK,
+  which keeps CI simple. Its immediate-mode `OnRender` drawing is a close match for SwiftUI's `Canvas`, which the
+  globe and the connecting orb are written against. Borderless, rounded, dark windows are straightforward.
+- **The tray icon** uses WinForms' `NotifyIcon`, the standard Win32 tray icon wrapper, rather than a third-party package.
+- **.NET 10** is the current long-term-support release (.NET 8's support ended in November 2026). Both executables
+  are published self-contained, so the PC doesn't need a .NET runtime.
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## How it works
 
-## Test and Deploy
+The app never runs elevated. It sends one request per connection to the **wgbar-helper** Windows service over the
+named pipe `\\.\pipe\wgbar-helper`: `status`, `up NAME [ALLOWEDIPS]`, `down NAME`, `addresses NAME`, `read NAME`,
+`write NAME` or `import NAME`, the same commands as the macOS helper. The service runs as LocalSystem and:
 
-Use the built-in continuous integration in GitLab.
+- accepts connections only from SYSTEM and the one account `install.ps1` registered (the counterpart of the macOS
+  sudoers rule), and refuses network logons;
+- validates tunnel names (1-32 of `A-Z a-z 0-9 _ = + . -`, no reserved device names) and AllowedIPs overrides (only
+  address characters, at most 512);
+- keeps configs in `C:\Program Files\WireGuardBar\Data\Configurations`, with an access list that allows only SYSTEM and
+  Administrators, and refuses to use that folder if it's a link;
+- starts tunnels with `wireguard.exe /installtunnelservice <config>` and stops them with `/uninstalltunnelservice`,
+  running WireGuard's tools by full path from `C:\Program Files\WireGuard`, never through a shell;
+- strips private and preshared keys from `wg show all dump` before returning status.
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+Before sending anything, the app checks that the pipe is owned by SYSTEM or Administrators, so another program that
+grabbed the pipe name first never receives a config.
 
-***
+WireGuard's tunnel services start automatically with Windows, so a tunnel that was on when you shut down comes back
+on at the next boot. Tunnels running from the official WireGuard app show up as a warning in the tray panel.
 
-# Editing this README
+## Security notes
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+- **Windows Hello is an in-app check.** Any program running as your account can also send the helper `read` and
+  `write`, which means it can read private keys or change a config (WireGuard for Windows only runs `PostUp`-style
+  scripts when its `DangerousScriptExecution` setting is on). This is the cost of switching tunnels without a UAC
+  prompt each time, the same trade-off as the macOS version.
+- Remove everything with `uninstall.ps1 -RemoveConfigs`.
 
-## Suggestions for a good README
+## Not verified yet
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+This port was written on a Mac. What was checked there: the whole solution compiles (with the .NET 9 SDK and the
+Windows targeting packs), and the core tests pass, including the connecting orb against the upstream golden vectors.
+Not yet run on Windows:
 
-## Name
-Choose a self-explaining name for your project.
+- the app itself: tray icon drawing, flyout placement next to the tray, Manage window layout, the globe and orb
+  animation, dark title bar;
+- the helper service end to end (pipe access list, owner check, config folder permissions, `wireguard.exe` calls);
+- Windows Hello and the credential-prompt fallback (including Microsoft-account passwords);
+- reading the Wi-Fi name without location access on Windows 11 24H2 and later;
+- `install.ps1`, `uninstall.ps1`, `package.ps1` and the GitLab CI jobs.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Only x64 builds are produced.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+MIT. The connecting orb is a port of [thinking-orbs](https://github.com/Jakubantalik/thinking-orbs) by Jakub Antalik
+(MIT); its notice is in `src/WireGuardBar.Core/OrbWeb.cs`. WireGuard is a registered trademark of Jason A. Donenfeld.
