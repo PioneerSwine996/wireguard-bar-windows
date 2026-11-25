@@ -11,7 +11,9 @@ First version: a Windows port of WireGuard Bar for macOS 1.0.
   and Edit Configuration behind Windows Hello or the Windows credential prompt.
 - Import `.conf` files; only one tunnel active at a time; split tunnel routes computed from `Address` and `DNS`.
 - `wgbar-helper` Windows service behind an access-listed named pipe, driving WireGuard for Windows' tunnel service.
-- `install.ps1` / `uninstall.ps1`, and GitLab CI that tests and packages a self-contained zip.
+- `WireGuardBar-Setup.exe` (Inno Setup): one UAC prompt installs the app and the helper service, offers to install
+  WireGuard for Windows, and adds a Start menu entry, sign-in autostart and an uninstaller. GitLab CI tests and builds it.
+- Setup screen in the Manage window whenever WireGuard for Windows or a helper of the matching `version` is missing.
 
 ### Design Rationale
 
@@ -21,6 +23,8 @@ First version: a Windows port of WireGuard Bar for macOS 1.0.
   pipe's owner so a squatter can't receive configs.
 - Configs live under `Program Files` rather than `ProgramData`, because standard users can create folders in
   `ProgramData` ahead of the installer.
+- The helper registers itself (`wgbar-helper.exe install`) so the installer and the in-app setup screen share one
+  code path, and it picks the session's signed-in account rather than the elevated one.
 - Platform-neutral logic sits in `WireGuardBar.Core` so its tests run on any OS, including the Mac it was written on.
 
 ### Notes & Caveats

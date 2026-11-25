@@ -24,32 +24,32 @@ well-tested code.
 
 ## Install
 
-1. Install [WireGuard for Windows](https://www.wireguard.com/install/).
-2. Download `WireGuardBar-windows.zip` from the latest CI run on `main`:
-   <https://gitlab.com/PioneerSwine996/wireguard-bar-windows/-/jobs/artifacts/main/raw/WireGuardBar-windows.zip?job=zip>
-3. Unzip it, open PowerShell **as administrator** in the unzipped folder and run:
+1. Download `WireGuardBar-Setup.exe` from the latest CI run on `main`:
+   <https://gitlab.com/PioneerSwine996/wireguard-bar-windows/-/jobs/artifacts/main/raw/WireGuardBar-Setup.exe?job=setup>
+2. Run it. One administrator prompt installs the app and its helper service, a Start menu entry and sign-in
+   autostart. If [WireGuard for Windows](https://www.wireguard.com/install/) isn't installed, setup offers to
+   download and run its official installer.
+3. Import a tunnel with +. Windows 11 hides new tray icons in the overflow menu; drag the shield onto the taskbar to
+   keep it visible.
 
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\install.ps1
-   ```
+If WireGuard for Windows or the helper goes missing, or an update needs a newer helper, the Manage window shows a
+setup screen with **Get WireGuard** and **Install** (one administrator prompt) until everything is in place again.
 
-   If you elevate with a separate administrator account, name the account that will use the app:
-   `.\install.ps1 -User "PC\alex"`.
-4. Open **WireGuard Bar** from the Start menu and import a tunnel with +. Windows 11 hides new tray icons in the
-   overflow menu; drag the shield onto the taskbar to keep it visible.
+The installer isn't code-signed, so Windows SmartScreen will warn about it the first time: choose **More info** and
+**Run anyway**.
 
-To uninstall, run `.\uninstall.ps1` as administrator. It stops tunnels started from WireGuard Bar's configs and keeps
-the configs unless you add `-RemoveConfigs`.
+Uninstall from **Settings > Apps**. It stops tunnels started from WireGuard Bar's configs and asks before deleting the
+configs.
 
 ## Build
 
 ```powershell
 dotnet build WireGuardBar.sln
 dotnet test tests/WireGuardBar.Core.Tests
-.\scripts\package.ps1          # dist\WireGuardBar-windows.zip
+.\scripts\package.ps1          # dist\WireGuardBar-Setup.exe
 ```
 
-Needs the .NET 10 SDK. The core library and its tests also build and run on macOS and Linux; the app and helper
+Needs the .NET 10 SDK, and [Inno Setup 6](https://jrsoftware.org/isinfo.php) for the installer. The core library and its tests also build and run on macOS and Linux; the app and helper
 compile there too (`EnableWindowsTargeting`), but only run on Windows.
 
 ## Why C#, .NET 10 and WPF
@@ -66,18 +66,25 @@ compile there too (`EnableWindowsTargeting`), but only run on Windows.
 ## How it works
 
 The app never runs elevated. It sends one request per connection to the **wgbar-helper** Windows service over the
-named pipe `\\.\pipe\wgbar-helper`: `status`, `up NAME [ALLOWEDIPS]`, `down NAME`, `addresses NAME`, `read NAME`,
+named pipe `\\.\pipe\wgbar-helper`: `version`, `status`, `up NAME [ALLOWEDIPS]`, `down NAME`, `addresses NAME`, `read NAME`,
 `write NAME` or `import NAME`, the same commands as the macOS helper. The service runs as LocalSystem and:
 
-- accepts connections only from SYSTEM and the one account `install.ps1` registered (the counterpart of the macOS
-  sudoers rule), and refuses network logons;
+- accepts connections only from SYSTEM and the one account it was installed for (the counterpart of the macOS sudoers
+  rule): the account signed in to the Windows session, even if the administrator prompt was answered with a separate
+  admin account. Network logons are refused;
 - validates tunnel names (1-32 of `A-Z a-z 0-9 _ = + . -`, no reserved device names) and AllowedIPs overrides (only
   address characters, at most 512);
 - keeps configs in `C:\Program Files\WireGuardBar\Data\Configurations`, with an access list that allows only SYSTEM and
   Administrators, and refuses to use that folder if it's a link;
 - starts tunnels with `wireguard.exe /installtunnelservice <config>` and stops them with `/uninstalltunnelservice`,
   running WireGuard's tools by full path from `C:\Program Files\WireGuard`, never through a shell;
-- strips private and preshared keys from `wg show all dump` before returning status.
+- strips private and preshared keys from `wg show all dump` before returning status;
+- refuses configs with `PreUp`, `PostUp`, `PreDown` or `PostDown` from the app, since WireGuard would run those as
+  SYSTEM if its `DangerousScriptExecution` setting were on.
+
+`wgbar-helper.exe install` and `uninstall` (run elevated by the installer, its uninstaller and the setup screen)
+register and remove the service. The app only offers to register it from `Program Files`, so the service never runs
+an executable a standard user could replace.
 
 Before sending anything, the app checks that the pipe is owned by SYSTEM or Administrators, so another program that
 grabbed the pipe name first never receives a config.
@@ -88,10 +95,10 @@ on at the next boot. Tunnels running from the official WireGuard app show up as 
 ## Security notes
 
 - **Windows Hello is an in-app check.** Any program running as your account can also send the helper `read` and
-  `write`, which means it can read private keys or change a config (WireGuard for Windows only runs `PostUp`-style
-  scripts when its `DangerousScriptExecution` setting is on). This is the cost of switching tunnels without a UAC
-  prompt each time, the same trade-off as the macOS version.
-- Remove everything with `uninstall.ps1 -RemoveConfigs`.
+  `write`, which means it can read private keys or change a config (though not add script hooks). This is the cost of
+  switching tunnels without a UAC prompt each time, the same trade-off as the macOS version.
+- Editing the config of a tunnel that is running with Route all traffic off changes the original, not the running
+  copy; the change applies the next time the tunnel is enabled (or after Disconnect/Connect), not at the next reboot.
 
 ## Not verified yet
 
@@ -104,7 +111,10 @@ Not yet run on Windows:
 - the helper service end to end (pipe access list, owner check, config folder permissions, `wireguard.exe` calls);
 - Windows Hello and the credential-prompt fallback (including Microsoft-account passwords);
 - reading the Wi-Fi name without location access on Windows 11 24H2 and later;
-- `install.ps1`, `uninstall.ps1`, `package.ps1` and the GitLab CI jobs.
+- the setup screen's UAC flow, `wgbar-helper.exe install` / `uninstall` (session-user lookup, `sc.exe` calls);
+- the Inno Setup script (WireGuard download, upgrade over a running install, uninstall), `package.ps1` and the GitLab
+  CI jobs, including whether Chocolatey is present on GitLab's Windows runners;
+- whether a client opening the pipe for read/write is granted access with the user's `ReadWrite` rule.
 
 Only x64 builds are produced.
 
