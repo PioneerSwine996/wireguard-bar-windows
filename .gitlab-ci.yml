@@ -1,5 +1,6 @@
 # GitLab's hosted Windows runners (Windows Server 2022). WPF and the Windows service only build
 # for Windows, and the .NET 10 SDK isn't preinstalled there, so each job installs it first.
+# release runs on GitLab's shared Linux runners.
 
 default:
   tags: [saas-windows-medium-amd64]
@@ -11,7 +12,7 @@ default:
     - $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
     - $env:DOTNET_NOLOGO = '1'
 
-stages: [test, package]
+stages: [test, package, release]
 
 test:
   stage: test
@@ -38,3 +39,39 @@ setup:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG
+
+# On a version tag (v1.2.3): a GitLab Release linking the installer, then the same release on the
+# GitHub mirror with the installer uploaded. The file name has no version in it, so
+# https://github.com/PioneerSwine996/wireguard-bar-windows/releases/latest/download/WireGuardBar-Setup.exe
+# stays a stable link. Needs the masked, protected CI/CD variable GITHUB_RELEASE_TOKEN (fine-grained
+# GitHub token: Contents read/write on wireguard-bar-windows), and v* tags marked protected so that
+# variable is available to tag pipelines.
+release:
+  stage: release
+  inherit:
+    default: false   # shared Linux runner, not the Windows one
+  image: alpine:3.20
+  needs: [setup]
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  variables:
+    GITHUB_REPO: PioneerSwine996/wireguard-bar-windows
+  script:
+    - apk add --no-cache curl jq github-cli
+    - test -n "$GITHUB_RELEASE_TOKEN" || { echo "GITHUB_RELEASE_TOKEN isn't set (or the tag isn't protected)"; exit 1; }
+    - NOTES="Download WireGuardBar-Setup.exe below. See CHANGELOG.md for what changed."
+    # GitLab Release (the job token may create releases for its own project)
+    - >
+      jq -n --arg tag "$CI_COMMIT_TAG" --arg notes "$NOTES"
+      --arg url "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/WireGuardBar-Setup.exe?job=setup"
+      '{tag_name: $tag, name: ("WireGuard Bar for Windows " + $tag), description: $notes,
+        assets: {links: [{name: "WireGuardBar-Setup.exe", url: $url, link_type: "package"}]}}'
+      > release.json
+    - >
+      curl --fail-with-body -sS -X POST -H "JOB-TOKEN: $CI_JOB_TOKEN" -H "Content-Type: application/json"
+      --data @release.json "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases"
+    # GitHub Release on the mirror; --target creates the tag at this commit if it isn't there yet
+    - >
+      GH_TOKEN="$GITHUB_RELEASE_TOKEN" gh release create "$CI_COMMIT_TAG" WireGuardBar-Setup.exe
+      --repo "$GITHUB_REPO" --target "$CI_COMMIT_SHA"
+      --title "WireGuard Bar for Windows $CI_COMMIT_TAG" --notes "$NOTES"

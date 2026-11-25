@@ -32,6 +32,18 @@ git push origin main
 
 When the mirror pushes `main`, GitHub sees the pull request's commits on `main` and marks it merged.
 
+## Releasing (maintainers)
+
+Push a version tag (`v1.2.3`) to GitLab. CI builds `WireGuardBar-Setup.exe`, creates a GitLab Release that links it,
+and creates the same release on the GitHub mirror with the installer attached.
+
+One-time setup for the GitHub half:
+
+1. On GitHub, create a fine-grained personal access token limited to `PioneerSwine996/wireguard-bar-windows` with
+   **Contents: Read and write**.
+2. In GitLab, **Settings > CI/CD > Variables**: add it as `GITHUB_RELEASE_TOKEN`, **masked** and **protected**.
+3. In GitLab, **Settings > Repository > Protected tags**: protect `v*`, so tag pipelines can read that variable.
+
 ## Style
 
 - C#: follow the existing code; small files, no new dependencies. Logic that doesn't need Windows goes in
