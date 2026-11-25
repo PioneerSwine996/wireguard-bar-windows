@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- the 10.0.19041 SDK projection gives Windows Hello and Wi-Fi connection profiles -->
+    <TargetFramework>$(WgNet)-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>WireGuardBar</AssemblyName>
+    <RootNamespace>WireGuardBar</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WFO0003 wants WinForms' DPI API; this is a WPF app, where the manifest is the place for PerMonitorV2 -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- WinForms is only here for the tray icon; keep its types out of the global namespace -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WireGuardBar.Core\WireGuardBar.Core.csproj" />
+  </ItemGroup>
+</Project>
