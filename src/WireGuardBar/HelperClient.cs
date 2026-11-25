@@ -5,24 +5,28 @@ using WireGuardBar.Core;
 
 namespace WireGuardBar;
 
-public sealed class HelperFailure(string message) : Exception(message);
+/// NeedsSetup: the helper is missing, outdated or registered for another account; the setup screen fixes it.
+public sealed class HelperFailure(string message, bool needsSetup = false) : Exception(message)
+{
+    public bool NeedsSetup { get; } = needsSetup;
+}
 
 /// Talks to the wgbar-helper service over its named pipe. The pipe's ACL decides who may call it;
 /// this side checks the pipe is owned by SYSTEM/Administrators before sending anything, so a program
 /// that grabbed the pipe name first never sees a config.
 public static class HelperClient
 {
-    private const string NotInstalled = "The helper service isn't running. Run install.ps1 as administrator.";
+    private const string NotInstalled = "The helper service isn't running.";
 
     public static async Task<string> RunAsync(string command, string? name = null, string? argument = null, string? input = null)
     {
         await using var pipe = new NamedPipeClientStream(".", Protocol.PipeName, PipeDirection.InOut,
             PipeOptions.Asynchronous, TokenImpersonationLevel.Identification);
         try { await pipe.ConnectAsync(3000); }
-        catch (TimeoutException) { throw new HelperFailure(NotInstalled); }
+        catch (TimeoutException) { throw new HelperFailure(NotInstalled, needsSetup: true); }
         catch (UnauthorizedAccessException)
         {
-            throw new HelperFailure("The helper service was installed for a different Windows account. Run install.ps1 again from this account.");
+            throw new HelperFailure("The helper service is set up for a different Windows account.", needsSetup: true);
         }
         VerifyServer(pipe);
 
@@ -32,11 +36,11 @@ public static class HelperClient
         try { response = await Protocol.ReadAsync<HelperResponse>(pipe, timeout.Token); }
         catch (Exception e) when (e is IOException or InvalidDataException)
         {
-            throw new HelperFailure("The helper service closed the connection. If it's older than the app, run install.ps1 again.");
+            throw new HelperFailure("The helper service closed the connection.");
         }
         if (response.Ok) return response.Output;
         if (response.Error?.StartsWith("usage:") == true)
-            throw new HelperFailure("The installed helper is older than the app. Run install.ps1 again.");
+            throw new HelperFailure("The installed helper is older than the app.", needsSetup: true);
         throw new HelperFailure(response.Error ?? "The helper failed.");
     }
 

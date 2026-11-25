@@ -55,6 +55,8 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <TextBlock Text="{Binding SetupNotice}" Foreground="{StaticResource OrangeBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
+                           Visibility="{Binding SetupNotice, Converter={StaticResource Is}}"/>
                 <TextBlock Text="{Binding ConflictText}" Foreground="{StaticResource OrangeBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
                            Visibility="{Binding ConflictText, Converter={StaticResource Is}}"/>
                 <TextBlock Text="{Binding Error}" Foreground="{StaticResource RedBrush}" FontSize="12" TextWrapping="Wrap" Cursor="Hand"

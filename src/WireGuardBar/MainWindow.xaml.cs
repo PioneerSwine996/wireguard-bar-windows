@@ -51,6 +51,13 @@ public partial class MainWindow : Window
 
     private void Error_Click(object sender, MouseButtonEventArgs e) => Store.Error = null;
 
+    // Setup
+
+    private void GetWireGuard_Click(object sender, RoutedEventArgs e) =>
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://www.wireguard.com/install/") { UseShellExecute = true });
+
+    private async void InstallHelper_Click(object sender, RoutedEventArgs e) => await Store.InstallHelperAsync();
+
     // On-Demand
 
     private void AddNetwork_Click(object sender, RoutedEventArgs e) => AddTypedNetwork();

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Threading;
@@ -18,6 +19,13 @@ public sealed class TunnelStore : Observable
     private string? error, conflict, ssid, localIp;
     private TunnelItem? selected;
 
+    private bool helperChecked;     // the helper answered `version` with ours since it last failed
+    private string? setupReason;
+    private bool needsWireGuard;
+
+    private static readonly string WireGuardExe =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WireGuard", "wireguard.exe");
+
     private bool ssidRead;          // false = re-check on-demand against the current network
     private string? lastSsid;
     private string? autoConnected;  // tunnel that on-demand turned on
@@ -30,6 +38,14 @@ public sealed class TunnelStore : Observable
     public string? Ssid { get => ssid; private set => Set(ref ssid, value); }
     public string NetworkLabel => string.Join("\n", new[] { ssid ?? "Local network", localIp }.OfType<string>());
     public TunnelItem? Active => Tunnels.FirstOrDefault(t => t.IsUp);
+
+    // Setup: like the macOS app's first-run screen, shown until WireGuard for Windows and a helper
+    // of the right version are in place, and again whenever that stops being true.
+    public bool NeedsWireGuard { get => needsWireGuard; private set { Set(ref needsWireGuard, value); Raise(nameof(SetupNeeded)); Raise(nameof(SetupNotice)); } }
+    /// Why the helper needs (re)installing, or null when it's fine.
+    public string? SetupReason { get => setupReason; private set { Set(ref setupReason, value); Raise(nameof(SetupNeeded)); Raise(nameof(SetupNotice)); } }
+    public bool SetupNeeded => NeedsWireGuard || SetupReason is not null;
+    public string? SetupNotice => SetupNeeded ? "Finish setting up in Manage." : null;
 
     public TunnelItem? Selected
     {
@@ -67,11 +83,24 @@ public sealed class TunnelStore : Observable
     {
         try
         {
+            NeedsWireGuard = !File.Exists(WireGuardExe);
             try
             {
+                if (!helperChecked)
+                {
+                    if ((await HelperClient.RunAsync("version")).Trim() != Protocol.HelperVersion.ToString())
+                        throw new HelperFailure("The installed helper is a different version from the app.", needsSetup: true);
+                    helperChecked = true;
+                }
                 var report = StatusReport.Parse(await HelperClient.RunAsync("status"));
                 Merge(report.Tunnels);
                 Conflict = report.Foreign.FirstOrDefault();
+                SetupReason = null;
+            }
+            catch (HelperFailure e) when (e.NeedsSetup)
+            {
+                SetupReason = e.Message;
+                helperChecked = false;
             }
             catch (HelperFailure e) { Error = e.Message; }
 
@@ -208,6 +237,34 @@ public sealed class TunnelStore : Observable
     }
 
     private TunnelItem? Find(string name) => Tunnels.FirstOrDefault(t => t.Name == name);
+
+    /// Registers the helper service from this install folder: one UAC prompt.
+    public async Task InstallHelperAsync()
+    {
+        var folder = AppContext.BaseDirectory;
+        var helper = Path.Combine(folder, "wgbar-helper.exe");
+        // A service runs its exe as SYSTEM, so it must live where only administrators can replace it.
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (!folder.StartsWith(programFiles + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(helper))
+        {
+            Error = "Install WireGuard Bar with WireGuardBar-Setup.exe; the helper can only be registered from Program Files.";
+            return;
+        }
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo(helper, "install")
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden,
+            })!;
+            await process.WaitForExitAsync();
+            if (process.ExitCode != 0) Error = $"The helper service couldn't be installed (exit code {process.ExitCode}).";
+        }
+        catch (Win32Exception e) when (e.NativeErrorCode == 1223) { return; }   // UAC prompt cancelled
+        helperChecked = false;
+        await RefreshAsync();
+    }
 
     // Configs
 

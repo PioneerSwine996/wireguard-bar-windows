@@ -225,6 +225,34 @@
             </ScrollViewer>
         </Grid>
 
+        <!-- Setup: until WireGuard for Windows and a matching helper are installed -->
+        <Grid Grid.ColumnSpan="3" Background="{StaticResource WindowBrush}"
+              Visibility="{Binding SetupNeeded, Converter={StaticResource Is}}">
+            <StackPanel Width="440" VerticalAlignment="Center">
+                <TextBlock Text="Finish setting up" FontSize="20" FontWeight="SemiBold" Margin="14,0,0,14"/>
+                <Border Style="{StaticResource Group}">
+                    <StackPanel>
+                        <DockPanel Style="{StaticResource Row}">
+                            <TextBlock Text="WireGuard for Windows" VerticalAlignment="Center"/>
+                            <Button Content="Get WireGuard" Style="{StaticResource AccentButton}" DockPanel.Dock="Right" Click="GetWireGuard_Click"
+                                    Visibility="{Binding NeedsWireGuard, Converter={StaticResource Is}}"/>
+                            <TextBlock Text="Installed" Style="{StaticResource Value}"
+                                       Visibility="{Binding NeedsWireGuard, Converter={StaticResource Is}, ConverterParameter=not}"/>
+                        </DockPanel>
+                        <DockPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Helper service" VerticalAlignment="Center"/>
+                            <Button Content="Install" Style="{StaticResource AccentButton}" DockPanel.Dock="Right" Click="InstallHelper_Click"
+                                    Visibility="{Binding SetupReason, Converter={StaticResource Is}}"/>
+                            <TextBlock Text="Running" Style="{StaticResource Value}"
+                                       Visibility="{Binding SetupReason, Converter={StaticResource Is}, ConverterParameter=not}"/>
+                        </DockPanel>
+                        <TextBlock Text="{Binding SetupReason}" Style="{StaticResource Secondary}" FontSize="12" TextWrapping="Wrap" Margin="14,0,14,9"
+                                   Visibility="{Binding SetupReason, Converter={StaticResource Is}}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
         <!-- Error banner: click to dismiss -->
         <Border Grid.ColumnSpan="3" VerticalAlignment="Bottom" Background="#D9FF3B30" Padding="12,10" Cursor="Hand"
                 MouseLeftButtonUp="Error_Click" Visibility="{Binding Error, Converter={StaticResource Is}}">
