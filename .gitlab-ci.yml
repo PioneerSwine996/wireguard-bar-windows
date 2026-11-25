@@ -1,0 +1,38 @@
+# GitLab's hosted Windows runners (Windows Server 2022). WPF and the Windows service only build
+# for Windows, and the .NET 10 SDK isn't preinstalled there, so each job installs it first.
+
+default:
+  tags: [saas-windows-medium-amd64]
+  before_script:
+    - $ErrorActionPreference = 'Stop'
+    - Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1
+    - ./dotnet-install.ps1 -Channel 10.0 -InstallDir "$env:CI_PROJECT_DIR\.dotnet"
+    - $env:PATH = "$env:CI_PROJECT_DIR\.dotnet;$env:PATH"
+    - $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
+    - $env:DOTNET_NOLOGO = '1'
+
+stages: [test, package]
+
+test:
+  stage: test
+  script:
+    - dotnet build WireGuardBar.sln -c Release
+    - if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    - dotnet test tests/WireGuardBar.Core.Tests -c Release --no-build
+    - if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+zip:
+  stage: package
+  script:
+    - ./scripts/package.ps1
+    # fixed name at the root, for a stable raw link:
+    # https://gitlab.com/PioneerSwine996/wireguard-bar-windows/-/jobs/artifacts/main/raw/WireGuardBar-windows.zip?job=zip
+    - Move-Item dist/WireGuardBar-windows.zip WireGuardBar-windows.zip
+  artifacts:
+    name: "WireGuardBar-windows-$CI_COMMIT_REF_SLUG"
+    paths:
+      - WireGuardBar-windows.zip
+    expire_in: 90 days
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
